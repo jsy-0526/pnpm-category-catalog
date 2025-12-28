@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs'
+import { Table } from 'console-table-printer'
 import { parseDocument, YAMLMap } from 'yaml'
 
 export const stringifyYamlWithTopLevelBlankLine = (value: string) => {
@@ -19,4 +20,16 @@ export const stringifyYamlWithTopLevelBlankLine = (value: string) => {
 
 export const writeFile = (path: string, content: string) => {
     writeFileSync(path, content, 'utf-8')
+}
+
+export const printTable = (data: any) => {
+    const p = new Table()
+
+    p.addColumns([
+        { name: 'Dependencies', alignment: 'left' },
+        { name: 'Catalog', alignment: 'left' },
+    ])
+
+    p.addRows(data)
+    return p.printTable()
 }

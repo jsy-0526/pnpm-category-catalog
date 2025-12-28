@@ -4,7 +4,7 @@ import { glob } from 'glob'
 import { bgCyan } from 'picocolors'
 import { resolveConfig } from '@/config.ts'
 import { resolvePackageDependencies } from '@/dependencies.ts'
-import { stringifyYamlWithTopLevelBlankLine, writeFile } from '@/utils.ts'
+import { printTable, stringifyYamlWithTopLevelBlankLine, writeFile } from '@/utils.ts'
 import { batchProcessCatalog, getWorkSpaceYaml } from '@/work.space.ts'
 import { name, version } from '../package.json'
 
@@ -34,15 +34,20 @@ cli.command('')
         }
 
         // 显示创建的分类信息
-        // if (workspace.catalogs.categories) {
-        //     console.log('\n📦 创建的分类汇总:')
-        //     workspace.catalogs.categories.forEach((category, index) => {
-        //         console.log(`  ${index + 1}. ${category.name} (${category.packages.length} 个包)`)
-        //         category.packages.forEach((pkg) => {
-        //             console.log(`     - ${pkg}`)
-        //         })
-        //     })
-        // }
+        if (workspace.catalogs.categories) {
+            printTable(workspace.catalogs.categories.reduce((acc: {
+                Dependencies: string
+                Catalog: string
+            }[], category) => {
+                for (const pkg of category.packages) {
+                    acc.push({
+                        Dependencies: pkg,
+                        Catalog: `catalog:${category.name}`,
+                    })
+                }
+                return acc
+            }, []))
+        }
 
         // 更新 package.json 中的依赖版本
         const pkgFiles = resolvePackageDependencies(config, packagePathMap, workspace)
