@@ -12,6 +12,8 @@ points:
   support
 - **Batch Processing**: Support loop processing until all packages are categorized
 
+<img src="screenshot.gif" alt="screenshot">
+
 ## 📦 Installation
 
 ### Global Installation
