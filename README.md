@@ -71,8 +71,8 @@ If you want to use ESLint for some [constraints](https://github.com/antfu/pnpm-w
 1. If you are using [`@antfu/eslint-config`](https://github.com/antfu/eslint-config)
 ```ts
 export default antfu({
-  pnpm: true,
-  // other options ...
+    pnpm: true,
+    // other options ...
 })
 ```
 2. If you are not using `@antfu/eslint-config`, use it directly in `eslint.config.js`. For details, see: [pnpm-workspace-utils](https://github.com/antfu/pnpm-workspace-utils/tree/main/packages/eslint-plugin-pnpm)

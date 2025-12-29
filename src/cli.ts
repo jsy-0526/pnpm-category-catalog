@@ -4,7 +4,7 @@ import { glob } from 'glob'
 import pc from 'picocolors'
 import { resolveConfig } from '@/config.ts'
 import { resolvePackageDependencies } from '@/dependencies.ts'
-import { printTable, stringifyYamlWithTopLevelBlankLine, writeFile } from '@/utils.ts'
+import { printTable, scanDependencyUsage, stringifyYamlWithTopLevelBlankLine, writeFile } from '@/utils.ts'
 import { batchProcessCatalog, getWorkSpaceYaml } from '@/work.space.ts'
 import { name, version } from '../package.json'
 
@@ -24,10 +24,14 @@ cli.command('')
 
             const workSpaceYaml = await getWorkSpaceYaml(config)
 
+            // 扫描依赖使用情况
+            const usageMap = scanDependencyUsage(config, packagePathMap)
+
             // 批量处理 catalog
             const workspace = await batchProcessCatalog({
                 ...config,
                 ...workSpaceYaml,
+                usageMap,
             })
 
             // 只有在进行了分类操作且确认保存后才进行后续处理
