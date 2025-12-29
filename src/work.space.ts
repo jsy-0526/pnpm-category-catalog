@@ -57,7 +57,7 @@ interface ConfirmModifiyOptions {
 /**
  * final confirmation to save all changes
  */
-export const confirmModifiy = async (options: ConfirmModifiyOptions): Promise<IWorkSpaceContext | null> => {
+export const confirmModify = async (options: ConfirmModifiyOptions): Promise<IWorkSpaceContext | null> => {
     const { allCatalogs, config, context } = options
     if (allCatalogs.length === 0) {
         outro('用户当前已取消操作')
@@ -320,5 +320,5 @@ Run "pnpx codemod pnpm/catalog"`,
     const allCatalogs: AllCatalogsType[] = []
 
     await processCatalog({ allCatalogs, context })
-    return await confirmModifiy({ allCatalogs, config, context })
+    return await confirmModify({ allCatalogs, config, context })
 }
