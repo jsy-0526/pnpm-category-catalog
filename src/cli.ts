@@ -1,16 +1,32 @@
-import { intro, outro } from '@clack/prompts'
+import { confirm, intro, log, outro } from '@clack/prompts'
 import cac from 'cac'
 import { glob } from 'glob'
 import pc from 'picocolors'
+import {
+    clearBackups,
+    createBackup,
+    deleteBackup,
+    formatBackupTime,
+    getLatestBackup,
+    listBackups,
+    restoreBackup,
+} from '@/backup.ts'
 import { resolveConfig } from '@/config.ts'
 import { resolvePackageDependencies } from '@/dependencies.ts'
-import { printTable, scanDependencyUsage, stringifyYamlWithTopLevelBlankLine, writeFile } from '@/utils.ts'
+import {
+    printTable,
+    scanDependencyUsage,
+    stringifyYamlWithTopLevelBlankLine,
+    writeFile,
+} from '@/utils.ts'
 import { batchProcessCatalog, getWorkSpaceYaml } from '@/work.space.ts'
 import { name, version } from '../package.json'
 
 const cli = cac(name)
 
-cli.command('')
+// 主命令
+cli
+    .command('')
     .option('--cwd <path>', 'Specify the working directory')
     .action(async (options: { cwd?: string }) => {
         try {
@@ -39,44 +55,218 @@ cli.command('')
                 return ''
             }
 
+            // 收集要修改的文件路径
+            const pkgFiles = resolvePackageDependencies(
+                config,
+                packagePathMap,
+                workspace,
+            )
+            const updatedFiles = pkgFiles.filter(i => i.isUpdate)
+            const filesToBackup = [
+                workspace.path,
+                ...updatedFiles.map(i => i.path),
+            ]
+
+            // 创建备份
+            const categoryNames
+                = workspace.catalogs.categories?.map(c => c.name).join(', ') || ''
+            const backupId = createBackup(
+                config,
+                filesToBackup,
+                `创建分类: ${categoryNames}`,
+            )
+            log.info(
+                `已备份 ${filesToBackup.length} 个文件，如需恢复请执行: ${pc.cyan(
+                    'pcc undo',
+                )}`,
+            )
+
             // 显示创建的分类信息
             if (workspace.catalogs.categories) {
-                printTable(workspace.catalogs.categories.reduce((acc: {
-                    Dependencies: string
-                    Catalog: string
-                }[], category) => {
-                    for (const pkg of category.packages) {
-                        acc.push({
-                            Dependencies: pkg,
-                            Catalog: `catalog:${category.name}`,
-                        })
-                    }
-                    return acc
-                }, []))
+                printTable(
+                    workspace.catalogs.categories.reduce(
+                        (
+                            acc: {
+                                Dependencies: string
+                                Catalog: string
+                            }[],
+                            category,
+                        ) => {
+                            for (const pkg of category.packages) {
+                                acc.push({
+                                    Dependencies: pkg,
+                                    Catalog: `catalog:${category.name}`,
+                                })
+                            }
+                            return acc
+                        },
+                        [],
+                    ),
+                )
             }
 
             // 更新 package.json 中的依赖版本
-            const pkgFiles = resolvePackageDependencies(config, packagePathMap, workspace)
-            const updatedFiles = pkgFiles.filter(i => i.isUpdate)
-
             if (updatedFiles.length > 0) {
-                // console.log('\n📝 更新以下文件的依赖版本:')
                 updatedFiles.forEach((i) => {
-                    // console.log(`  - ${i.path}`)
-                    // console.log(i.context)
                     writeFile(i.path, i.context)
                 })
+                log.success(`已更新 ${updatedFiles.length} 个 package.json 文件`)
             }
             else {
-                console.log('\nℹ️ 没有需要更新的 package.json 文件')
+                log.info('没有需要更新的 package.json 文件')
             }
 
-            writeFile(workspace.path, stringifyYamlWithTopLevelBlankLine(workspace.context))
+            writeFile(
+                workspace.path,
+                stringifyYamlWithTopLevelBlankLine(workspace.context),
+            )
+            log.success('已更新 pnpm-workspace.yaml')
+
+            outro(`操作完成！备份 ID: ${pc.dim(backupId)}`)
         }
         catch (e) {
             outro(e as string)
         }
     })
+
+// undo 命令
+cli
+    .command('undo [backupId]', 'Restore files from backup')
+    .option('--list', 'List all backups')
+    .option('--clear', 'Clear all backups')
+    .option('--delete <id>', 'Delete a specific backup')
+    .option('--cwd <path>', 'Specify the working directory')
+    .action(
+        async (
+            backupId: string | undefined,
+            options: {
+                list?: boolean
+                clear?: boolean
+                delete?: string
+                cwd?: string
+            },
+        ) => {
+            const config = resolveConfig(options.cwd)
+
+            intro(pc.bgCyan(` Pnpm workspace catalog - Undo [v${version}]`))
+
+            if (options.list) {
+                const backups = listBackups(config)
+
+                if (backups.length === 0) {
+                    log.warn('没有找到任何备份')
+                    outro('')
+                    return
+                }
+
+                log.info(`共找到 ${backups.length} 个备份:\n`)
+
+                for (const backup of backups) {
+                    const { manifest } = backup
+                    console.log(`  ${pc.cyan(manifest.id)}`)
+                    console.log(`    时间: ${formatBackupTime(manifest.timestamp)}`)
+                    console.log(`    文件: ${manifest.files.length} 个`)
+                    if (manifest.description) {
+                        console.log(`    描述: ${manifest.description}`)
+                    }
+                    console.log('')
+                }
+
+                outro('')
+                return
+            }
+
+            if (options.clear) {
+                const backups = listBackups(config)
+
+                if (backups.length === 0) {
+                    log.warn('没有找到任何备份')
+                    outro('')
+                    return
+                }
+
+                const confirmed = await confirm({
+                    message: `确认删除所有 ${backups.length} 个备份？`,
+                })
+
+                if (!confirmed) {
+                    outro('已取消')
+                    return
+                }
+
+                const deletedCount = clearBackups(config)
+                log.success(`已删除 ${deletedCount} 个备份`)
+                outro('')
+                return
+            }
+
+            if (options.delete) {
+                const success = deleteBackup(config, options.delete)
+
+                if (success) {
+                    log.success(`已删除备份: ${options.delete}`)
+                }
+                else {
+                    log.error(`未找到备份: ${options.delete}`)
+                }
+
+                outro('')
+                return
+            }
+
+            const backup = backupId
+                ? listBackups(config).find(b => b.manifest.id === backupId)
+                : getLatestBackup(config)
+
+            if (!backup) {
+                log.error(backupId ? `未找到备份: ${backupId}` : '没有找到任何备份')
+                outro('')
+                return
+            }
+
+            const { manifest } = backup
+
+            log.info('备份信息:')
+            console.log(`  ID: ${pc.cyan(manifest.id)}`)
+            console.log(`  时间: ${formatBackupTime(manifest.timestamp)}`)
+            console.log(`  描述: ${manifest.description || '(无)'}`)
+            console.log(`  文件:`)
+            for (const file of manifest.files) {
+                console.log(`    - ${file.relativePath}`)
+            }
+            console.log('')
+
+            const confirmed = await confirm({
+                message: `确认恢复这 ${manifest.files.length} 个文件？`,
+            })
+
+            if (!confirmed) {
+                outro('已取消')
+                return
+            }
+
+            const restoredCount = restoreBackup(config, manifest.id)
+
+            if (restoredCount >= 0) {
+                log.success(`已恢复 ${restoredCount} 个文件`)
+
+                const shouldDelete = await confirm({
+                    message: '是否删除该备份？',
+                    initialValue: false,
+                })
+
+                if (shouldDelete) {
+                    deleteBackup(config, manifest.id)
+                    log.info('备份已删除')
+                }
+            }
+            else {
+                log.error('恢复失败')
+            }
+
+            outro('')
+        },
+    )
 
 cli.help()
 cli.version(version)
