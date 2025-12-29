@@ -1,4 +1,4 @@
-import type { IConfig, IUpdatePackage, IWorkSpaceContext } from '@/types.ts'
+import type { IConfig, IUpdatePackage, IWorkSpaceContext } from '@/types'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DEPENDENCY_TYPES } from '@/constant.ts'
